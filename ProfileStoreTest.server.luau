@@ -174,6 +174,64 @@ task.spawn(function()
 	
 	print(PREFIX .. `Begin...`)
 
+	-- Save attempt results:
+
+	do
+
+		local key = UniqueKey("SaveAttempt")
+		local attempts = {}
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				table.insert(attempts, {outcome, purpose})
+			end
+		end)
+
+		local profile = Store1:StartSessionAsync(key)
+		profile.Data.Counter = 1
+		profile:Save()
+		profile.OnAfterSave:Wait()
+		local saved = Store1:GetAsync(key)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		local payload = Store1:GetAsync(key)
+		payload.Data.Counter = 2
+		payload:SetAsync()
+		local overwritten = Store1:GetAsync(key)
+
+		connection:Disconnect()
+		Store1:RemoveAsync(key)
+
+		TestPass(`Manual, final and overwrite save attempts`, saved.Data.Counter == 1 and overwritten.Data.Counter == 2
+			and #attempts == 3
+			and attempts[1][1] == "Written" and attempts[1][2] == "SessionSave"
+			and attempts[2][1] == "Written" and attempts[2][2] == "FinalSave"
+			and attempts[3][1] == "Written" and attempts[3][2] == "Overwrite")
+
+	end
+
+	do
+
+		local store = ProfileStore.New(UniqueKey("MockSaveAttempt"), {})
+		local key = UniqueKey("Mock")
+		local attempts = {}
+		local connection = store.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			table.insert(attempts, {profile_key, outcome, purpose})
+		end)
+
+		local profile = store.Mock:StartSessionAsync(key)
+		profile.Data.Counter = 1
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		local saved = store.Mock:GetAsync(key)
+
+		connection:Disconnect()
+		store.Mock:RemoveAsync(key)
+
+		TestPass(`Mock saves reach the store signal`, saved.Data.Counter == 1 and #attempts == 1
+			and attempts[1][1] == key and attempts[1][2] == "Written" and attempts[1][3] == "FinalSave")
+
+	end
+
 	-- Versioning test:
 
 	if is_api_access == true and TEST_MOCK == false then
@@ -517,7 +575,15 @@ task.spawn(function()
 		
 		local initial_check = profile.LastSavedData ~= profile.Data
 
+		local attempt
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				attempt = {outcome, purpose}
+			end
+		end)
+
 		profile.OnAfterSave:Wait()
+		connection:Disconnect()
 		
 		local is_pass = initial_check and profile.LastSavedData ~= profile.Data
 			and profile.LastSavedData.LoadedFirstTime == true
@@ -528,6 +594,7 @@ task.spawn(function()
 		Store1:RemoveAsync(key)
 
 		TestPass("LastSavedData test", is_pass)
+		TestPass("Auto-save attempt result", attempt ~= nil and attempt[1] == "Written" and attempt[2] == "SessionSave")
 
 	end
 	
@@ -646,6 +713,12 @@ task.spawn(function()
 		local key = UniqueKey(4)
 		
 		local profile = Store1:StartSessionAsync(key)
+		local attempt
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				attempt = {outcome, purpose}
+			end
+		end)
 		
 		UpdateAsync(Store1.Name, key, function() -- "Stealing" profile through injection
 			return {
@@ -670,9 +743,11 @@ task.spawn(function()
 			task.wait()
 		end
 		
+		connection:Disconnect()
 		Store1:RemoveAsync(key)
 		
 		TestPass(`Test #4`, true)
+		TestPass(`Lost ownership save attempt`, attempt ~= nil and attempt[1] == "OwnershipRefused" and attempt[2] == "SessionSave")
 		
 	end
 	

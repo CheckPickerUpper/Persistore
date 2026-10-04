@@ -54,6 +54,11 @@ MAD STUDIO (by loleris)
 			DataStore with no relation to the real DataStore
 			
 		ProfileStore.Name   [string]
+
+		ProfileStore.OnSaveAttempt   [Signal] (profile_key, outcome, purpose)
+			-- Reports each completed save request, including retries; Shared with ProfileStore.Mock
+			outcome [string]: "Written", "OwnershipRefused", "RequestFailed"
+			purpose [string]: "SessionSave", "FinalSave", "Overwrite"
 		
 	Methods [ProfileStore]:
 	
@@ -708,6 +713,8 @@ end
 
 local function SaveProfileAsync(profile, is_ending_session, is_overwriting, last_save_reason)
 
+	local attempt_purpose = if is_overwriting == true then "Overwrite" elseif is_ending_session == true then "FinalSave" else "SessionSave"
+
 	if type(profile.Data) ~= "table" then
 		error(`[{script.Name}]: Developer code likely set "Profile.Data" to a non-table value! (STORE:{profile.ProfileStore.Name}; KEY:{profile.Key})`)
 	end
@@ -738,6 +745,8 @@ local function SaveProfileAsync(profile, is_ending_session, is_overwriting, last
 			repeat_save_flag = false
 		end
 
+		local attempt_owns_profile = false
+
 		local loaded_data, key_info = UpdateAsync(
 			profile.ProfileStore,
 			profile.Key,
@@ -762,6 +771,9 @@ local function SaveProfileAsync(profile, is_ending_session, is_overwriting, last
 					else
 						session_owns_profile = true
 					end
+
+					-- UpdateAsync may retry its transform; Only the committed transform decides ownership.
+					attempt_owns_profile = session_owns_profile
 
 					-- We may only edit the profile if this server has ownership of the profile:
 
@@ -813,6 +825,14 @@ local function SaveProfileAsync(profile, is_ending_session, is_overwriting, last
 			},
 			profile.is_mock
 		)
+
+		if loaded_data == nil or key_info == nil then
+			profile.ProfileStore.OnSaveAttempt:Fire(profile.Key, "RequestFailed", attempt_purpose)
+		elseif attempt_owns_profile == true then
+			profile.ProfileStore.OnSaveAttempt:Fire(profile.Key, "Written", attempt_purpose)
+		else
+			profile.ProfileStore.OnSaveAttempt:Fire(profile.Key, "OwnershipRefused", attempt_purpose)
+		end
 
 		if loaded_data ~= nil and key_info ~= nil then
 
@@ -1001,6 +1021,7 @@ export type VersionQuery<T> = {
 
 type ProfileStoreStandard<T> = {
 	Name: string,
+	OnSaveAttempt: {Connect: (self: any, listener: (profile_key: string, outcome: "Written" | "OwnershipRefused" | "RequestFailed", purpose: "SessionSave" | "FinalSave" | "Overwrite") -> ()) -> ({Disconnect: (self: any) -> ()})},
 	StartSessionAsync: (self: any, profile_key: string, params: {Steal: boolean?}) -> (Profile<T>?),
 	MessageAsync: (self: any, profile_key: string, message: JSONAcceptable) -> (boolean),
 	GetAsync: (self: any, profile_key: string, version: string?) -> (Profile<T>?),
@@ -1292,6 +1313,7 @@ function ProfileStore.New(store_name, template)
 		},
 
 		Name = store_name,
+		OnSaveAttempt = Signal.New(),
 
 		template = template,
 		data_store = nil,
@@ -1300,6 +1322,7 @@ function ProfileStore.New(store_name, template)
 		is_ready = true,
 
 	}
+	self.Mock.OnSaveAttempt = self.OnSaveAttempt
 	setmetatable(self, ProfileStore)
 
 	local options = Instance.new("DataStoreOptions")

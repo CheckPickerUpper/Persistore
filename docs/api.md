@@ -133,6 +133,43 @@ ProfileStore.Name   [string] (read-only)
 ```
 The name of the DataStore that was defined as the first argument of `ProfileStore.New()`.
 
+### .OnSaveAttempt
+``` luau
+ProfileStore.OnSaveAttempt   [Signal] (profile_key, outcome, purpose)
+```
+Reports the result of each completed save request for this store, including failed requests and retries.
+Connect before calling `:StartSessionAsync()` to also observe the final save made when a session start is cancelled
+or the server closes before the profile can be returned.
+
+`outcome` is one of:
+
+- **`"Written"`** - The request succeeded and its committed transform had permission to write the profile's values.
+- **`"OwnershipRefused"`** - The request succeeded, but its committed transform did not own the session and left the profile's values unchanged.
+- **`"RequestFailed"`** - The request failed and did not return a saved profile and key information.
+
+`purpose` is one of:
+
+- **`"SessionSave"`** - An auto-save or `Profile:Save()` request.
+- **`"FinalSave"`** - A request ending a session, including shutdown, session handoff and cancelled session starts.
+- **`"Overwrite"`** - A `Profile:SetAsync()` request.
+
+One event is fired per save request, even if `UpdateAsync` runs its transform more than once.
+Final saves keep their existing retry policy, so a failure can be followed by another event for the same key and purpose.
+The event is fired after the request returns, before processing its result or making a recursive final save.
+It does not include load, message, removal or version-query requests. It does not change save or session behaviour.
+
+``` luau
+local PlayerStore = ProfileStore.New("PlayerData", {})
+local connection = PlayerStore.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+  print(`Save attempt (Key:{profile_key};Outcome:{outcome};Purpose:{purpose})`)
+end)
+```
+
+`PlayerStore.Mock.OnSaveAttempt` is the same signal as `PlayerStore.OnSaveAttempt`, and reports mock saves as well.
+If live and mock profiles use the same key, these events do not distinguish between them.
+`Profile.OnAfterSave` keeps its existing behaviour; it can fire after a request that did not own the session.
+Use `OnSaveAttempt` when you need the save outcome rather than the returned snapshot.
+
 ### :StartSessionAsync()
 ``` luau
 ProfileStore:StartSessionAsync(profile_key, params?) --> [Profile] or nil
