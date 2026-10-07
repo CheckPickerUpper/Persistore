@@ -15,8 +15,8 @@ importers:
         specifier: 1.0.813
         version: 1.0.813
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.5.3
+        version: 5.5.3
 
 packages:
 
@@ -26,8 +26,8 @@ packages:
   '@rbxts/types@1.0.813':
     resolution: {integrity: sha512-Qpsmqnl+TNdl5AYqKFkYHyUrv652r30qK6A3GObOyDz+cvn8i+HE61mO021oq0nu1FcA4pMHbYqLSbv2CMF9Ig==}
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@5.5.3:
+    resolution: {integrity: sha512-/hreyEujaB0w76zKo6717l3L0o/qEUtRgdvUBvlkhoWeOVMjMuHNHk0BRBzikzuGDqNmPQbg5ifMEqsHLiIUcQ==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -37,4 +37,4 @@ snapshots:
 
   '@rbxts/types@1.0.813': {}
 
-  typescript@5.9.3: {}
+  typescript@5.5.3: {}

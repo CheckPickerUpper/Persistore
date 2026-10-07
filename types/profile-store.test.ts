@@ -45,4 +45,3 @@ const requiredProfile: ProfileStore.Profile<{ Coins: number }, { Region: string 
 ProfileStore.IsClosing = false;
 ProfileStore.IsCriticalState = false;
 ProfileStore.DataStoreState = "NoAccess";
-

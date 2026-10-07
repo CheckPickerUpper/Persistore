@@ -20,6 +20,6 @@
   "devDependencies": {
     "@rbxts/compiler-types": "3.0.0-types.0",
     "@rbxts/types": "1.0.813",
-    "typescript": "5.9.3"
+    "typescript": "5.5.3"
   }
 }
