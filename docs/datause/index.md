@@ -13,6 +13,8 @@ Persistore also uses Roblox [MessagingService](https://create.roblox.com/docs/re
 
 ## [`:StartSessionAsync()`](/Persistore/api/#startsessionasync)
 
+[`:StartSessionResultAsync()`](/Persistore/api/#startsessionresultasync) uses the same DataStore and MessagingService requests as `:StartSessionAsync()`; it also reports why a session did not start.
+
 **Until a session is started:**
 
 - Usually uses 1 [`:UpdateAsync()`](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync) call.
@@ -43,8 +45,8 @@ if a [`MessagingService`](https://create.roblox.com/docs/reference/engine/classe
 - Uses 1 [`:UpdateAsync()`](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync) call and 1
 [`:PublishAsync()`](https://create.roblox.com/docs/reference/engine/classes/MessagingService#PublishAsync) call.
 - If there's a server that currently has a session started for the targeted profile, 1 [`:UpdateAsync()`](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync) call
-will be used on that server regardless of whether [`:MessageAsync()`](/Persistore/api/#startsessionasync) was called on the same server. The 300 second auto-save interval timer would also be reset in this scenario.
-Persistore does not assume developer code would immediately process a message sent by [`:MessageAsync()`](/Persistore/api/#startsessionasync) on the same server at all times, so
+will be used on that server regardless of whether [`:MessageAsync()`](/Persistore/api/#messageasync) was called on the same server. The 300 second auto-save interval timer would also be reset in this scenario.
+Persistore does not assume developer code would immediately process a message sent by [`:MessageAsync()`](/Persistore/api/#messageasync) on the same server at all times, so
 instant storage of the message to the DataStore is prioritized to ensure data persistence.
 
 ## [`:GetAsync()`](/Persistore/api/#getasync)
@@ -63,6 +65,10 @@ and may use 1 [`GlobalDataStore:GetAsync()`](https://create.roblox.com/docs/refe
 ## [`:Save()`](/Persistore/api/#save)
 
 - Uses 1 [`:UpdateAsync()`](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync) call.
+
+## [`:SaveAsync()`](/Persistore/api/#saveasync)
+
+- Uses 1 [`:UpdateAsync()`](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync) call, the same as `:Save()`.
 
 ## [`:SetAsync()`](/Persistore/api/#setasync)
 

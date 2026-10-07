@@ -7,7 +7,16 @@ Since DataStores are server-side only, Persistore is also a module that should o
 
 * [Persistore repository](https://github.com/CheckPickerUpper/Persistore)
 * Use `ProfileStore.luau` as the `ProfileStore` ModuleScript under `ServerScriptService`.
-* The package names are `@rbxts/persistore` for roblox-ts and `checkpickerupper/persistore` for Wally.
+
+For roblox-ts, install a pinned commit from GitHub (the package is not published to npm):
+
+```sh
+pnpm add "@rbxts/persistore@git+https://github.com/CheckPickerUpper/Persistore.git#<commit>"
+```
+
+Replace `<commit>` with the full commit SHA you want to use, then import from `@rbxts/persistore`.
+
+The Wally package `checkpickerupper/persistore` is not published. Copy `ProfileStore.luau` into your project as described above.
 
 ### Upstream ProfileStore Roblox library
 
@@ -25,6 +34,10 @@ These screenshots show the upstream model; Persistore keeps the same `ProfileSto
 To start using Persistore, you need a piece of code that starts a profile session when a player joins. When a profile session is started,
 changes to the `Profile.Data` table will be auto-saved periodically and saved for the last time after `Profile:EndSession()` is called.
 You can find explanations for every method and property of `ProfileStore` and `Profile` objects in the [Persistore API](../api).
+
+`StartSessionAsync` returns `nil` when a session does not start. To receive the specific reason, use
+[`StartSessionResultAsync`](/Persistore/api/#startsessionresultasync): its `SessionNotStarted` result reports
+`Because` as `ServerClosing`, `Cancelled`, `SupersededOnThisServer`, `ClaimedByAnotherServer`, or `TimedOut`.
 
 This code is a standard implementation of Persistore:
 
@@ -77,7 +90,7 @@ local function PlayerAdded(player)
       end
 
    else
-      -- This condition should only happen when the Roblox server is shutting down
+      -- The session did not start; StartSessionResultAsync reports why (see above)
       player:Kick(`Profile load fail - Please rejoin`)
    end
 

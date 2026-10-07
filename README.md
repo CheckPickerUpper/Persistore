@@ -2,7 +2,7 @@
 
 Based on [ProfileStore by loleris (MAD STUDIO)](https://github.com/MadStudioRoblox/ProfileStore), Apache-2.0.
 
-The API keeps ProfileStore's names so existing code drops in: the `ProfileStore` module table, `ProfileStore.New`, `Profile`, the `ProfileStore.luau` file, the Rojo instance name, and the TypeScript namespace stay unchanged.
+The API keeps ProfileStore's names: the `ProfileStore` module table, `ProfileStore.New`, `Profile`, the `ProfileStore.luau` file, the Rojo instance name, and the TypeScript namespace stay unchanged. In roblox-ts, change imports to `@rbxts/persistore`.
 
 Persistore is a Roblox DataStore wrapper that streamlines auto-saving, session locking and a few other features for the game developer. Persistore's source code runs on a single ModuleScript.
 

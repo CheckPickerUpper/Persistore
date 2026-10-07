@@ -2,7 +2,7 @@
 
 Based on [ProfileStore by loleris (MAD STUDIO)](https://github.com/MadStudioRoblox/ProfileStore), Apache-2.0.
 
-The API keeps ProfileStore's names so existing code drops in: the `ProfileStore` module table, `ProfileStore.New`, `Profile`, the `ProfileStore.luau` file, the Rojo instance name, and the TypeScript namespace stay unchanged.
+The API keeps ProfileStore's names: the `ProfileStore` module table, `ProfileStore.New`, `Profile`, the `ProfileStore.luau` file, the Rojo instance name, and the TypeScript namespace stay unchanged. In roblox-ts, change imports to `@rbxts/persistore`.
 
 Persistore is a Roblox DataStore wrapper that streamlines auto-saving, session locking
 and a few other features for the game developer. Persistore's source code runs on a single
@@ -15,7 +15,7 @@ If you want to save time writing code for player data caching or want to prevent
 
 For help with the upstream project, [join the upstream ProfileStore discussion on the Roblox forums (Click here)](https://devforum.roblox.com/t/profilestore/3190543).
 
-For Persistore bugs, use the [Persistore repository](https://github.com/CheckPickerUpper/Persistore).
+For Persistore bugs, use the [Persistore issue tracker](https://github.com/CheckPickerUpper/Persistore/issues).
 
 ## How does it work?
 
@@ -46,20 +46,20 @@ to Roblox developers. Methods with the `Async` keyword yield until a result is r
 
 ## Changes from ProfileService
 
-Persistore is a successor to ProfileService - it uses a very similar mechanism for handling
+ProfileStore, the upstream project Persistore is based on, is loleris's successor to ProfileService - it uses a very similar mechanism for handling
 session locks which has been improved to be more responsive at handling conflicts between
 servers. Here's a list of significant changes:
 
 - **Default auto-save period increased from 30 to 300 seconds** - Nearly x10 fewer DataStore
 calls consume less server resources which means more scalability!
-Persistore relies on auto-saves to store latest data and
+ProfileStore relies on auto-saves to store latest data and
 resolve session conflicts in a single `:UpdateAsync()` call. With the addition of
-MessagingService, Persistore can now auto-save slower while still reacting to external game
-servers trying to take the session lock. Under normal circumstances Persistore should
+MessagingService, ProfileStore can now auto-save slower while still reacting to external game
+servers trying to take the session lock. Under normal circumstances ProfileStore should
 outperform ProfileService in session conflict resolution time!
 
 - **More performance, more server-friendly** - `MessagingService` 
-helps resolve session conflicts much faster. Persistore also tries to strain Roblox services
+helps resolve session conflicts much faster. ProfileStore also tries to strain Roblox services
 less when things inevitably do go wrong with exponential backoff, timeouts and cancel conditions.
 
 - **Outdated 7 second DataStore queue replaced** - An internal DataStore API call queue
@@ -68,7 +68,7 @@ ProfileService was released and the 7 second queue was replaced with a queue tha
 calls to the same DataStore key as soon as all previous calls finish.
 
 - **Luau types for autocompletion** - This will help make fewer typos while writing code with
-Persistore.
+ProfileStore.
 
 - **API cleanup** - Function and variable names have been changed to be shorter and more conventional.
 
@@ -81,14 +81,14 @@ time by utilizing MessagingService. Use this for features like in-game player gi
 where data delivery is crucial.
 
 - **`Profile.OnSave`, `Profile.OnLastSave` and `Profile.OnAfterSave` signals** - Useful for
-altering and reacting to data along Persistore's DataStore requests.
+altering and reacting to data along ProfileStore's DataStore requests.
 
-## Should I switch from ProfileService (the older module)?
+## Should I switch from ProfileService (loleris's older module)?
 
-It might be a good idea to let old projects keep using ProfileService and start using Persistore
-for brand new ones, but if you're feeling risky...
+The upstream ProfileStore project recommends keeping old projects on ProfileService and using ProfileStore
+for new ones. Persistore is a modified fork of ProfileStore.
 
-Persistore DataStore profiles are backwards-compatible with ProfileService! ProfileService profiles
-should load from the DataStore using the same keys in Persistore without issue, but
-ProfileService (the older module) might have issues loading the same profiles again if you start using [`ProfileStore:MessageAsync()`](/Persistore/api/#messageasync)
-(on the new module). You should first do Roblox studio tests with API access before pushing this change live.
+ProfileStore DataStore profiles are backwards-compatible with ProfileService, and Persistore inherits this data format.
+ProfileService profiles should load from the DataStore using the same keys in ProfileStore or Persistore without issue, but
+ProfileService (loleris's older module) might have issues loading the same profiles again if you start using [`ProfileStore:MessageAsync()`](/Persistore/api/#messageasync).
+You should first do Roblox Studio tests with API access before pushing this change live.
