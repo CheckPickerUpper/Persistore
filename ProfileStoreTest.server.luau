@@ -179,14 +179,16 @@ task.spawn(function()
 		local store = ProfileStore.New(UniqueKey("AbortedUpdate"), {})
 		local key = UniqueKey("Copy")
 		local profile = store.Mock:StartSessionAsync(key)
+		local saw_session = false
 		UpdateAsync(store.Name, key, function(data)
 			if type(data.MetaData.ActiveSession) == "table" then
+				saw_session = true
 				data.MetaData.ActiveSession[2] = "AbortedSession"
 			end
 			return nil
 		end, true)
 		local saved_profile = store.Mock:GetAsync(key)
-		TestPass(`An aborted mock update preserves the stored session`, saved_profile.Session.JobId == profile.Session.JobId)
+		TestPass(`An aborted mock update preserves the stored session`, saw_session == true and saved_profile.Session.JobId == profile.Session.JobId)
 		profile:EndSession()
 		profile.OnAfterSave:Wait()
 		store.Mock:RemoveAsync(key)
@@ -707,6 +709,7 @@ task.spawn(function()
 		local last_save_reason
 		profile.OnLastSave:Connect(function(reason)
 			last_save_reason = reason
+			profile.Data.Counter = 76
 		end)
 		
 		local injected_data = UpdateAsync(Store1.Name, key, function(data) -- Injecting profile table with force load request
@@ -733,7 +736,7 @@ task.spawn(function()
 		Store1:RemoveAsync(key)
 
 		TestPass(`Test #5 force-load saves the payload and reports External`, is_injected == true and last_save_reason == "External"
-			and profile:IsActive() == false and saved_profile.Data.Counter == 75 and saved_profile.Session == nil)
+			and profile:IsActive() == false and saved_profile.Data.Counter == 76 and saved_profile.Session == nil)
 		
 	end
 	
