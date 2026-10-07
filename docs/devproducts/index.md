@@ -1,15 +1,15 @@
 This is a resource that can help you implement [Developer Products](https://create.roblox.com/docs/production/monetization/developer-products) into your
-Roblox game when you're also using ProfileStore.
+Roblox game when you're also using Persistore.
 
 There are two ways you could handle [Developer Product](https://create.roblox.com/docs/production/monetization/developer-products) purchases -
 one way is based on the [official Roblox documentation on handling developer product purchases](https://create.roblox.com/docs/production/monetization/developer-products#handling-developer-product-purchases), while the other way is based on
 observations on how [Roblox MarketplaceService API](https://create.roblox.com/docs/reference/engine/classes/MarketplaceService) works.
 
-**In these examples `local Profiles` is a reference to the `Profiles` table in the [Basic Usage example code](/ProfileStore/tutorial/#basic-usage) - you will need to have this code present for the examples below to work!**
+**In these examples `local Profiles` is a reference to the `Profiles` table in the [Basic Usage example code](/Persistore/tutorial/#basic-usage) - you will need to have this code present for the examples below to work!**
 
 ## The official Roblox way
 
-*(This is a Roblox official code example with alterations integrating ProfileStore)*
+*(This is a Roblox official code example with alterations integrating Persistore)*
 
 ``` luau
 local Profiles: {[player]: typeof(PlayerStore:StartSessionAsync())} = {} -- See Tutorial > Basic Usage
@@ -96,7 +96,7 @@ a particular single purchase even after a player rejoins the game.
 At the moment of writing, observing `MarketplaceService.ProcessReceipt` behavior, we can see that
 it doesn't mind code yielding inside of it until a `Enum.ProductPurchaseDecision` result is returned -
 we can use this behavior to wait until we know data related to this purchase has been successfully saved
-by ProfileStore.
+by Persistore.
 
 If retaining player rewards for developer products is completely critical, it should be noted that the
 "official Roblox way" would fail to do so on a very rare condition where at a time of a developer

@@ -1,13 +1,13 @@
 {
-  "name": "@rbxts/profile-store",
+  "name": "@rbxts/persistore",
   "version": "1.0.3",
-  "description": "ProfileStore fork with session reasons and save outcomes; declarations adapted from quamatic's @rbxts/profile-store",
+  "description": "Persistore: a ProfileStore fork with session reasons and save outcomes; declarations adapted from quamatic's @rbxts/profile-store",
   "main": "ProfileStore.luau",
   "types": "index.d.ts",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CheckPickerUpper/ProfileStore.git"
+    "url": "https://github.com/CheckPickerUpper/Persistore.git"
   },
   "files": [
     "ProfileStore.luau",

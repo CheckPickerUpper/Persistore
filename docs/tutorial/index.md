@@ -1,29 +1,32 @@
-## Getting ProfileStore
+## Getting Persistore
 
-ProfileStore is supposed to be a ModuleScript which you should place inside your Roblox game's *ServerScriptService* or wherever else is preferred.
-Since DataStores are server-side only, ProfileStore is also a module that should only run on the server-side.
+Persistore is supposed to be a ModuleScript which you should place inside your Roblox game's *ServerScriptService* or wherever else is preferred.
+Since DataStores are server-side only, Persistore is also a module that should only run on the server-side.
 
-### Option #1: Get ProfileStore from the Roblox library
+### Get Persistore from GitHub
 
-   - Get the library model [(click here)](https://create.roblox.com/store/asset/109379033046155/ProfileStore)
-   - Make sure the "ProfileStore" ModuleScript is under `ServerScriptService`:
+* [Persistore repository](https://github.com/CheckPickerUpper/Persistore)
+* Use `ProfileStore.luau` as the `ProfileStore` ModuleScript under `ServerScriptService`.
+* The package names are `@rbxts/persistore` for roblox-ts and `checkpickerupper/persistore` for Wally.
 
-![Open toolbox menu](../images/Step1.jpg)
+### Upstream ProfileStore Roblox library
 
-![Find the ProfileStore model](../images/Step2.jpg)
+The [upstream ProfileStore library model](https://create.roblox.com/store/asset/109379033046155/ProfileStore) is the original project's release and does not include Persistore's changes.
+These screenshots show the upstream model; Persistore keeps the same `ProfileStore` ModuleScript name:
 
-![Move ProfileStore to ServerScriptService](../images/Step3.jpg)
+![Open toolbox menu for the upstream model](../images/Step1.jpg)
 
-### Option #2: Github
-* [ProfileStore repository](https://github.com/MadStudioRoblox/ProfileStore)
+![Find the upstream ProfileStore model](../images/Step2.jpg)
+
+![Move the upstream ProfileStore model to ServerScriptService](../images/Step3.jpg)
 
 ## Basic Usage
 
-To start using ProfileStore, you need a piece of code that starts a profile session when a player joins. When a profile session is started,
+To start using Persistore, you need a piece of code that starts a profile session when a player joins. When a profile session is started,
 changes to the `Profile.Data` table will be auto-saved periodically and saved for the last time after `Profile:EndSession()` is called.
-You can find explanations for every method and property of `ProfileStore` and `Profile` objects in the [ProfileStore API](../api).
+You can find explanations for every method and property of `ProfileStore` and `Profile` objects in the [Persistore API](../api).
 
-This code is a standard implementation of ProfileStore:
+This code is a standard implementation of Persistore:
 
 ``` luau
 local ProfileStore = require(game.ServerScriptService.ProfileStore)
