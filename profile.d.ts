@@ -6,7 +6,7 @@ import { Signal } from "./signal";
 import { Store, SaveAttemptOutcome } from "./store";
 import { JSONAcceptable } from "./utility";
 
-export type SessionEndReason = "Manual" | "External" | "Shutdown" | "Stolen";
+export type SessionEndReason = "Manual" | "External" | "Shutdown" | "Stolen" | "Overwritten";
 
 export interface Profile<Template extends object, RobloxMetadata extends object = object> {
 	/**

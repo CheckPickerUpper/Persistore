@@ -1,5 +1,6 @@
 --[[
 MAD STUDIO (by loleris)
+Modified by CheckPickerUpper for the CheckPickerUpper/ProfileStore fork; see git history for changes.
 
 -[ProfileStore]---------------------------------------
 
@@ -135,7 +136,7 @@ MAD STUDIO (by loleris)
 			another server trying to take ownership of the session - this is impossible to
 			do without compromising on ProfileStore's speed.
 			
-		Profile.OnSessionEnd       [Signal] (reason [string]: "Manual", "External", "Shutdown", "Stolen")
+		Profile.OnSessionEnd       [Signal] (reason [string]: "Manual", "External", "Shutdown", "Stolen", "Overwritten")
 			-- Triggered when the profile session is terminated on this server
 		
 		Profile.OnAfterSave        [Signal] (last_saved_data)
@@ -947,7 +948,7 @@ local function SaveProfileAsync(profile, is_ending_session, is_overwriting, last
 
 				if is_active == true then
 					RemoveProfileFromAutoSave(profile)
-					profile.OnSessionEnd:Fire("Stolen")
+					profile.OnSessionEnd:Fire(if type(active_session) == "table" then "Stolen" else "Overwritten")
 				end
 
 			end
@@ -1002,8 +1003,9 @@ end
 export type JSONAcceptable = { JSONAcceptable } | { [string]: JSONAcceptable } | number | string | boolean | buffer
 
 export type SessionNotStartedReason = "ServerClosing" | "Cancelled" | "SupersededOnThisServer" | "ClaimedByAnotherServer" | "TimedOut"
-export type SessionEndReason = "Manual" | "External" | "Shutdown" | "Stolen"
+export type SessionEndReason = "Manual" | "External" | "Shutdown" | "Stolen" | "Overwritten"
 export type SaveAttemptOutcome = "Written" | "OwnershipRefused" | "RequestFailed"
+export type SaveAttemptPurpose = "SessionSave" | "FinalSave" | "Overwrite"
 export type SessionStartResult<T> = {Kind: "SessionStarted", Profile: Profile<T>} | {Kind: "SessionNotStarted", Because: SessionNotStartedReason}
 
 export type Profile<T> = {
@@ -1039,7 +1041,7 @@ export type VersionQuery<T> = {
 
 type ProfileStoreStandard<T> = {
 	Name: string,
-	OnSaveAttempt: {Connect: (self: any, listener: (profile_key: string, outcome: "Written" | "OwnershipRefused" | "RequestFailed", purpose: "SessionSave" | "FinalSave" | "Overwrite") -> ()) -> ({Disconnect: (self: any) -> ()})},
+	OnSaveAttempt: {Connect: (self: any, listener: (profile_key: string, outcome: SaveAttemptOutcome, purpose: SaveAttemptPurpose) -> ()) -> ({Disconnect: (self: any) -> ()})},
 	StartSessionAsync: (self: any, profile_key: string, params: {Steal: boolean?, Cancel: (() -> boolean)?}?) -> (Profile<T>?),
 	StartSessionResultAsync: (self: any, profile_key: string, params: {Steal: boolean?, Cancel: (() -> boolean)?}?) -> (SessionStartResult<T>),
 	MessageAsync: (self: any, profile_key: string, message: JSONAcceptable) -> (boolean),
@@ -1425,6 +1427,12 @@ local function RobloxMessageSubscription(profile, unique_session_id)
 
 end
 
+local function StartCancellationReason(): SessionNotStartedReason
+
+	return if ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+
+end
+
 local function StartSessionAsync(self, profile_key, params)
 
 	local is_mock = ReadMockFlag()
@@ -1627,7 +1635,7 @@ local function StartSessionAsync(self, profile_key, params)
 						-- The server has initiated a shutdown by the time this profile was loaded
 						SaveProfileAsync(profile, true) -- Release profile and yield until the DataStore call is finished
 						ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-						return nil, if ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+						return nil, StartCancellationReason()
 					end
 
 					ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
@@ -1637,7 +1645,7 @@ local function StartSessionAsync(self, profile_key, params)
 					
 					if ProfileStore.IsClosing == true or cancel_condition() == true then
 						ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-						return nil, if ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+						return nil, StartCancellationReason()
 					end
 
 					-- Profile is taken by some other session:
@@ -1676,7 +1684,7 @@ local function StartSessionAsync(self, profile_key, params)
 
 			elseif is_takeover == false then
 				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-			return nil, if ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+				return nil, StartCancellationReason()
 			end
 		else
 			
@@ -1690,7 +1698,7 @@ local function StartSessionAsync(self, profile_key, params)
 			
 			if default_timeout == true or ProfileStore.IsClosing == true or cancel_condition() == true then
 				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-				return nil, if default_timeout == true then "TimedOut" elseif ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+				return nil, if default_timeout == true then "TimedOut" else StartCancellationReason()
 			end
 			
 			task.wait(exp_backoff)  -- Repeat the call shortly
@@ -1701,7 +1709,7 @@ local function StartSessionAsync(self, profile_key, params)
 	end
 
 	ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-	return nil, if ProfileStore.IsClosing == true then "ServerClosing" else "Cancelled"
+	return nil, StartCancellationReason()
 
 end
 

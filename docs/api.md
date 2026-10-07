@@ -523,7 +523,7 @@ end)
 
 ### .OnSessionEnd
 ``` luau
-Profile.OnSessionEnd:Connect(function(reason: "Manual" | "External" | "Shutdown" | "Stolen")
+Profile.OnSessionEnd:Connect(function(reason: "Manual" | "External" | "Shutdown" | "Stolen" | "Overwritten")
   print(`Profile session has ended - Profile.Data will no longer be saved to the DataStore`)
 end)
 ```
@@ -532,7 +532,8 @@ Another server calls [`ProfileStore:StartSessionAsync()`] for the same profile o
 After the `Profile.OnSessionEnd` signal is fired, no further changes to `Profile.Data` should be made.
 `Profile.OnSessionEnd` will fire even when a profile session is stolen, whereas `Profile.OnLastSave` would not.
 The reason is `Manual` for `EndSession()`, `External` when another server requests the final save,
-`Shutdown` when the server closes, or `Stolen` when a save discovers that this session no longer owns the lock.
+`Shutdown` when the server closes, `Stolen` when a save discovers another session holds the lock,
+or `Overwritten` when the record has no session lock after an overwrite such as `SetAsync()`.
 Listeners that take no arguments continue to work.
 In some cases it would be preferable to kick the player from the game when this signal is fired:
 
@@ -659,7 +660,7 @@ Errors for profiles loaded in view mode; use `SetAsync()` for those profiles.
 | --- | --- |
 | `Written` | This attempt wrote the profile's data. `LastSavedData` now contains the saved data. |
 | `SessionEnded` | The profile was inactive before the attempt; no request was made. |
-| `OwnershipRefused` | The request completed, but this session no longer owned the lock. `OnSessionEnd` fires with `Stolen`. |
+| `OwnershipRefused` | The request completed, but this session no longer owned the lock. `OnSessionEnd` fires with `Stolen` if another session holds it, or `Overwritten` if the lock was cleared. |
 | `RequestFailed` | The DataStore request failed. |
 
 `OnSaveAttempt` reports the same outcome for this request, with purpose `SessionSave`.
