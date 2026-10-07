@@ -1405,11 +1405,14 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 		return true
 	end
 	
-	local user_steal = params.Steal == true
+	local claim = {
+		cancel_condition = cancel_condition,
+		user_steal = params.Steal == true,
+		request_force_load = true,
+		steal_session = false,
+	}
 
 	local force_load_steps = 0 -- Session conflict handling values
-	local request_force_load = true
-	local steal_session = false
 
 	local start = os.clock()
 	local exp_backoff = 1
@@ -1425,7 +1428,8 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 		LoadIndex += 1
 		local load_id = LoadIndex
 		local profile_load_jobs = is_mock == true and self.mock_load_jobs or self.load_jobs
-		local profile_load_job = profile_load_jobs[profile_key] -- {load_id, {loaded_data, key_info} or nil}
+		local profile_load_job = profile_load_jobs[profile_key] -- {load_id, {loaded_data, key_info} or nil, claim}
+		local is_takeover = profile_load_job ~= nil
 
 		local loaded_data, key_info
 		local unique_session_id = HttpService:GenerateGUID(false)
@@ -1433,6 +1437,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 		if profile_load_job ~= nil then
 
 			profile_load_job[1] = load_id -- Steal load job
+			profile_load_job[3] = claim
 			while profile_load_job[2] == nil do -- Wait for job to finish
 				task.wait()
 			end
@@ -1446,7 +1451,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 
 		else
 
-			profile_load_job = {load_id, nil}
+			profile_load_job = {load_id, nil, claim}
 			profile_load_jobs[profile_key] = profile_load_job
 
 			profile_load_job[2] = table.pack(UpdateAsync(
@@ -1454,8 +1459,9 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 				profile_key,
 				{
 					ExistingProfileHandle = function(latest_data)
+						local current_claim = profile_load_job[3]
 
-						if ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true) then
+						if ProfileStore.IsClosing == true or current_claim.cancel_condition() == true then
 							return
 						end
 
@@ -1475,13 +1481,13 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 										return
 									end
 								end
-								if steal_session == true or user_steal == true then
+								if current_claim.steal_session == true or current_claim.user_steal == true then
 									local force_load_interrupted = if force_load_session ~= nil then not IsThisSession(force_load_session) else true
-									if force_load_interrupted == false or user_steal == true then
+									if force_load_interrupted == false or current_claim.user_steal == true then
 										latest_data.MetaData.ActiveSession = {PlaceId, JobId, unique_session_id}
 										latest_data.MetaData.ForceLoadSession = nil
 									end
-								elseif request_force_load == true then
+								elseif current_claim.request_force_load == true then
 									latest_data.MetaData.ForceLoadSession = {PlaceId, JobId}
 								end
 							else
@@ -1491,8 +1497,9 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 
 					end,
 					MissingProfileHandle = function(latest_data)
+						local current_claim = profile_load_job[3]
 						
-						local is_cancel = ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true)
+						local is_cancel = ProfileStore.IsClosing == true or current_claim.cancel_condition() == true
 
 						latest_data.Data = DeepCopyTable(self.template)
 						latest_data.MetaData = {
@@ -1505,8 +1512,9 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 
 					end,
 					EditProfile = function(latest_data)
+						local current_claim = profile_load_job[3]
 
-						if ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true) then
+						if ProfileStore.IsClosing == true or current_claim.cancel_condition() == true then
 							return
 						end
 
@@ -1545,7 +1553,9 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 					if is_mock ~= true and DataStoreState == "Access" then
 						
 						-- Use MessagingService to quickly detect session conflicts and resolve them quickly:
-						task.spawn(RobloxMessageSubscription, profile, active_session[3]) -- Blocking prevention
+						if type(active_session[3]) == "string" then
+							task.spawn(RobloxMessageSubscription, profile, active_session[3]) -- Blocking prevention
+						end
 						
 					end
 
@@ -1572,10 +1582,10 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 
 					if force_load_interrupted == false then
 
-						if request_force_load == false then
+						if claim.request_force_load == false then
 							force_load_steps = force_load_steps + 1
 							if force_load_steps >= math.ceil(SESSION_STEAL / LOAD_REPEAT_PERIOD) then
-								steal_session = true
+								claim.steal_session = true
 							end
 						end
 						
@@ -1586,7 +1596,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 						end
 						
 						-- Attempt to load the profile again after a delay
-						local wait_until = os.clock() + if request_force_load == true then FIRST_LOAD_REPEAT else LOAD_REPEAT_PERIOD
+						local wait_until = os.clock() + if claim.request_force_load == true then FIRST_LOAD_REPEAT else LOAD_REPEAT_PERIOD
 						repeat task.wait() until os.clock() >= wait_until or ProfileStore.IsClosing == true
 
 					else
@@ -1595,11 +1605,11 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 						return nil
 					end
 
-					request_force_load = false -- Only request a force load once
+					claim.request_force_load = false -- Only request a force load once
 
 				end
 
-			else
+			elseif is_takeover == false then
 				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
 				return nil -- In this scenario it is likely that this server started shutting down
 			end
