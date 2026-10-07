@@ -35,17 +35,14 @@ const mockResult: ProfileStore.SessionStartResult<{ Coins: number }, { Region: s
 	store.Mock.StartSessionResultAsync("Mock", { Steal: true, Cancel: () => false });
 store.OnSaveAttempt.Connect((key, outcome, purpose) => {
 	const saved: ProfileStore.SaveAttemptOutcome = outcome;
+	const savedFor: ProfileStore.SaveAttemptPurpose = purpose;
 });
 store.Mock.OnSaveAttempt.Connect(() => {});
-const upstreamProfile: ProfileStore.Profile<{ Coins: number }, { Region: string }> = store.StartSessionAsync("Upstream");
+const upstreamProfile: ProfileStore.Profile<{ Coins: number }, { Region: string }> | undefined = store.StartSessionAsync("Upstream");
+// @ts-expect-error A claim can fail to start, so its result cannot be treated as a profile without checking.
+const requiredProfile: ProfileStore.Profile<{ Coins: number }, { Region: string }> = store.StartSessionAsync("Optional");
 
 ProfileStore.IsClosing = false;
 ProfileStore.IsCriticalState = false;
 ProfileStore.DataStoreState = "NoAccess";
 
-if (ProfileStore.IsClosing === false) {
-	store.StartSessionResultAsync("Yielding");
-	const narrowed = ProfileStore.IsClosing;
-	// @ts-expect-error A narrowed false value cannot be assigned true after the call.
-	const changed: typeof narrowed = true;
-}

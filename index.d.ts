@@ -3,7 +3,7 @@
 // Modified for the CheckPickerUpper/ProfileStore fork.
 
 import { Connection, Signal } from "./signal";
-import { Store, SessionNotStartedReason, SessionStartResult, SaveAttemptOutcome } from "./store";
+import { Store, SessionNotStartedReason, SessionStartResult, SaveAttemptOutcome, SaveAttemptPurpose } from "./store";
 import { Profile, SessionEndReason } from "./profile";
 import { VersionQuery } from "./version";
 import { JSONAcceptable } from "./utility";
@@ -25,7 +25,7 @@ export as namespace ProfileStore;
 
 declare namespace ProfileStore {
 	// Types
-	export { Profile, VersionQuery, Store, JSONAcceptable, Connection, Signal, SessionNotStartedReason, SessionStartResult, SessionEndReason, SaveAttemptOutcome };
+	export { Profile, VersionQuery, Store, JSONAcceptable, Connection, Signal, SessionNotStartedReason, SessionStartResult, SessionEndReason, SaveAttemptOutcome, SaveAttemptPurpose };
 
 	/**
 	 * When the Roblox is shutting down this value will be set to true and most methods will silently fail.

@@ -19,6 +19,7 @@ export type SessionStartResult<Template extends object, RobloxMetadata extends o
 	| { Kind: "SessionNotStarted"; Because: SessionNotStartedReason };
 
 export type SaveAttemptOutcome = "Written" | "OwnershipRefused" | "RequestFailed";
+export type SaveAttemptPurpose = "SessionSave" | "FinalSave" | "Overwrite";
 
 export interface Store<Template extends object, RobloxMetadata extends object = object> {
 	/**
@@ -34,7 +35,7 @@ export interface Store<Template extends object, RobloxMetadata extends object = 
 	readonly Name: string;
 
 	/** Reports each completed save request, including retries; shared with Mock. */
-	readonly OnSaveAttempt: Signal<[profileKey: string, outcome: SaveAttemptOutcome, purpose: "SessionSave" | "FinalSave" | "Overwrite"]>;
+	readonly OnSaveAttempt: Signal<[profileKey: string, outcome: SaveAttemptOutcome, purpose: SaveAttemptPurpose]>;
 
 	/**
 	 * Can return nil if the session did not start. Use StartSessionResultAsync to receive the reason.
@@ -51,7 +52,7 @@ export interface Store<Template extends object, RobloxMetadata extends object = 
 			Cancel?: () => boolean;
 			Steal?: boolean;
 		},
-	): Profile<Template, RobloxMetadata>;
+	): Profile<Template, RobloxMetadata> | undefined;
 
 	/** Starts a session and returns either the profile or the reason it did not start. */
 	StartSessionResultAsync(
