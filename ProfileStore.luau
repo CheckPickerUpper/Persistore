@@ -1455,7 +1455,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 				{
 					ExistingProfileHandle = function(latest_data)
 
-						if ProfileStore.IsClosing == true or cancel_condition() == true then
+						if ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true) then
 							return
 						end
 
@@ -1492,7 +1492,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 					end,
 					MissingProfileHandle = function(latest_data)
 						
-						local is_cancel = ProfileStore.IsClosing == true or cancel_condition() == true
+						local is_cancel = ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true)
 
 						latest_data.Data = DeepCopyTable(self.template)
 						latest_data.MetaData = {
@@ -1506,7 +1506,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 					end,
 					EditProfile = function(latest_data)
 
-						if ProfileStore.IsClosing == true or cancel_condition() == true then
+						if ProfileStore.IsClosing == true or (profile_load_job[1] == load_id and cancel_condition() == true) then
 							return
 						end
 
@@ -1545,7 +1545,7 @@ function ProfileStore:StartSessionAsync(profile_key, params)
 					if is_mock ~= true and DataStoreState == "Access" then
 						
 						-- Use MessagingService to quickly detect session conflicts and resolve them quickly:
-						task.spawn(RobloxMessageSubscription, profile, unique_session_id) -- Blocking prevention
+						task.spawn(RobloxMessageSubscription, profile, active_session[3]) -- Blocking prevention
 						
 					end
 

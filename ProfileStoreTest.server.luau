@@ -175,6 +175,40 @@ task.spawn(function()
 	
 	print(PREFIX .. `Begin...`)
 
+	for _, missing_record in ipairs({false, true}) do
+		local store = ProfileStore.New(UniqueKey("Takeover"), {Counter = 0})
+		local key = UniqueKey("Queued")
+		local profile = store:StartSessionAsync(key)
+		profile:EndSession()
+		if missing_record == true then
+			UpdateAsync(store.Name, key, function() return {GlobalUpdates = {0, {}}} end, false)
+		end
+		local is_cancel = false
+		local first_profile
+		local second_profile
+		local completed = 0
+		task.spawn(function()
+			first_profile = store:StartSessionAsync(key, {Cancel = function() return is_cancel end})
+			completed += 1
+		end)
+		task.spawn(function()
+			second_profile = store:StartSessionAsync(key)
+			completed += 1
+		end)
+		is_cancel = true
+		local deadline = os.clock() + 10
+		repeat task.wait() until completed == 2 or os.clock() > deadline
+		local expected_load_count = if missing_record == true then 1 else 2
+		TestPass(`A takeover ignores the previous request's cancellation ({if missing_record then "missing" else "existing"} record)`,
+			completed == 2 and first_profile == nil and second_profile ~= nil and second_profile:IsActive()
+			and second_profile.SessionLoadCount == expected_load_count)
+		for _, loaded_profile in pairs({first_profile, second_profile}) do
+			loaded_profile:EndSession()
+			loaded_profile.OnAfterSave:Wait()
+		end
+		store:RemoveAsync(key)
+	end
+
 	do
 		local store = ProfileStore.New(UniqueKey("AbortedUpdate"), {})
 		local key = UniqueKey("Copy")
