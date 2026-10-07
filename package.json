@@ -1,0 +1,25 @@
+{
+  "name": "@rbxts/profile-store",
+  "version": "1.0.3",
+  "description": "ProfileStore fork with session reasons and save outcomes; declarations adapted from quamatic's @rbxts/profile-store",
+  "main": "ProfileStore.luau",
+  "types": "index.d.ts",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CheckPickerUpper/ProfileStore.git"
+  },
+  "files": [
+    "ProfileStore.luau",
+    "*.d.ts"
+  ],
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "test:types": "tsc --noEmit -p types/tsconfig.json"
+  },
+  "devDependencies": {
+    "@rbxts/compiler-types": "3.0.0-types.0",
+    "@rbxts/types": "1.0.813",
+    "typescript": "5.9.3"
+  }
+}
