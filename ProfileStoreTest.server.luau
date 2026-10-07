@@ -526,10 +526,83 @@ task.spawn(function()
 		Store1:RemoveAsync(key)
 	end
 
-	if is_api_access == false or TEST_MOCK == true then
-		print(PREFIX .. `Skipping Shutdown session-end test due to no API access`)
-		print(PREFIX .. `Skipping RequestFailed save and TimedOut start tests due to no API access`)
+	do
+		local key = UniqueKey("Overwritten")
+		local profile = Store1:StartSessionAsync(key)
+		local reason
+		profile.OnSessionEnd:Connect(function(ended) reason = ended end)
+		local payload = Store1:GetAsync(key)
+		payload.Data.Counter = 75
+		payload:SetAsync()
+		profile.Data.Counter = 76
+		local outcome = profile:SaveAsync()
+		TestPass(`SetAsync replacement ends the live session with Overwritten`, reason == "Overwritten"
+			and outcome == "OwnershipRefused" and profile:IsActive() == false and Store1:GetAsync(key).Data.Counter == 75)
+		Store1:RemoveAsync(key)
 	end
+
+	do
+		local key = UniqueKey("TimedOut")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {SessionLoadCount = {}}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local errors = 0
+		local connection = ProfileStore.OnError:Connect(function(_, store_name, profile_key)
+			if store_name == Store1.Name and profile_key == key then errors += 1 end
+		end)
+		ProfileStore.SetConstant("START_SESSION_TIMEOUT", 0)
+		local result = Store1:StartSessionResultAsync(key)
+		ProfileStore.SetConstant("START_SESSION_TIMEOUT", 120)
+		connection:Disconnect()
+		TestPass(`Failed session requests time out without Cancel`, errors == 1
+			and result.Kind == "SessionNotStarted" and result.Because == "TimedOut")
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("FailedCancel")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {SessionLoadCount = {}}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local errors = 0
+		local connection = ProfileStore.OnError:Connect(function(_, store_name, profile_key)
+			if store_name == Store1.Name and profile_key == key then errors += 1 end
+		end)
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			return checks >= 4
+		end})
+		connection:Disconnect()
+		TestPass(`Cancel stops failed session requests`, errors == 1 and checks == 4
+			and result.Kind == "SessionNotStarted" and result.Because == "Cancelled")
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("RequestFailed")
+		local profile = Store1:StartSessionAsync(key)
+		local original_record
+		UpdateAsync(Store1.Name, key, function(data)
+			original_record = DeepCopyTable(data)
+			data.Data = "corrupt"
+			return data
+		end, TEST_MOCK)
+		local attempts = {}
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome)
+			if profile_key == key then table.insert(attempts, outcome) end
+		end)
+		local outcome = profile:SaveAsync()
+		connection:Disconnect()
+		TestPass(`SaveAsync reports a failed request consistently`, outcome == "RequestFailed"
+			and #attempts == 1 and attempts[1] == outcome)
+		UpdateAsync(Store1.Name, key, function() return original_record end, TEST_MOCK)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		Store1:RemoveAsync(key)
+	end
+
+	print(PREFIX .. `Skipping Shutdown session-end test (requires server shutdown)`)
 
 	-- Save attempt results:
 
