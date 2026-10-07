@@ -100,7 +100,8 @@ local function MockUpdateAsync(mock_data_store: {}, store_name: string, profile_
 		mock_data_store[store_name] = profile_store
 	end
 	
-	local transform = transform_fn(profile_store[profile_key])
+	local mock_entry = profile_store[profile_key]
+	local transform = transform_fn(if mock_entry ~= nil then DeepCopyTable(mock_entry.Data) else nil)
 	
 	if transform == nil then
 		return nil
@@ -173,6 +174,23 @@ task.spawn(function()
 	local is_api_access = ProfileStore.DataStoreState == "Access"
 	
 	print(PREFIX .. `Begin...`)
+
+	do
+		local store = ProfileStore.New(UniqueKey("AbortedUpdate"), {})
+		local key = UniqueKey("Copy")
+		local profile = store.Mock:StartSessionAsync(key)
+		UpdateAsync(store.Name, key, function(data)
+			if type(data.MetaData.ActiveSession) == "table" then
+				data.MetaData.ActiveSession[2] = "AbortedSession"
+			end
+			return nil
+		end, true)
+		local saved_profile = store.Mock:GetAsync(key)
+		TestPass(`An aborted mock update preserves the stored session`, saved_profile.Session.JobId == profile.Session.JobId)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		store.Mock:RemoveAsync(key)
+	end
 
 	-- Versioning test:
 
@@ -685,33 +703,37 @@ task.spawn(function()
 		local key = UniqueKey(5)
 		
 		local profile = Store1:StartSessionAsync(key)
+		profile.Data.Counter = 75
+		local last_save_reason
+		profile.OnLastSave:Connect(function(reason)
+			last_save_reason = reason
+		end)
 		
-		UpdateAsync(Store1.Name, key, function(data) -- Injecting profile table with force load request
-			return {
-				Data = {},
-				MetaData = {
-					ProfileCreateTime = 0,
-					SessionLoadCount = 0,
-					ActiveSession = data.MetaData.ActiveSession,
-					ForceLoadSession = {123, 123},
-					MetaTags = {},
-				},
-				GlobalUpdates = {0, {}},
-			}
-		end, TEST_MOCK)
-		
-		local start = os.clock()
-
-		while profile:IsActive() == true do
-			if os.clock() - start > 120 then
-				error(PREFIX .. `Session swap wait timeout`)
+		local injected_data = UpdateAsync(Store1.Name, key, function(data) -- Injecting profile table with force load request
+			if type(data.MetaData.ActiveSession) ~= "table" then
+				return nil
 			end
-			task.wait()
+			data.MetaData.ForceLoadSession = {123, 123}
+			return data
+		end, TEST_MOCK)
+
+		local active_session = injected_data and injected_data.MetaData.ActiveSession
+		local is_injected = type(active_session) == "table"
+			and active_session[1] == profile.Session.PlaceId and active_session[2] == profile.Session.JobId
+			and injected_data.MetaData.SessionLoadCount == profile.SessionLoadCount
+			and injected_data.MetaData.ForceLoadSession[1] == 123 and injected_data.MetaData.ForceLoadSession[2] == 123
+
+		if is_injected == true then
+			profile:Save()
+		else
+			profile:EndSession()
 		end
-		
+		profile.OnAfterSave:Wait()
+		local saved_profile = Store1:GetAsync(key)
 		Store1:RemoveAsync(key)
 
-		TestPass(`Test #5`, true)
+		TestPass(`Test #5 force-load saves the payload and reports External`, is_injected == true and last_save_reason == "External"
+			and profile:IsActive() == false and saved_profile.Data.Counter == 75 and saved_profile.Session == nil)
 		
 	end
 	
