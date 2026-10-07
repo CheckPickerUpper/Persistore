@@ -50,9 +50,9 @@ A signal that is called whenever `ProfileStore.IsCriticalState` changes. Example
 ``` luau
 ProfileStore.OnCriticalToggle:Connect(function(is_critical)
   if is_critical == true then
-    print(`ProfileStore entered critical state`)
+    print(`Persistore entered critical state`)
   else
-    print(`ProfileStore critical state is over`)
+    print(`Persistore critical state is over`)
   end
 end)
 ```
@@ -61,9 +61,9 @@ end)
 ``` luau
 ProfileStore.DataStoreState   [string] "NotReady" | "NoInternet" | "NoAccess" | "Access"
 ```
-Indicates ProfileStore's access to the DataStore. If at first check `ProfileStore.DataStoreState`
+Indicates Persistore's access to the DataStore. If at first check `ProfileStore.DataStoreState`
 is `"NotReady"`, it will eventually change to one of the other 3 possible values (`NoInternet`, `NoAccess` or `Access`) and
-never change again. `"Access"` means ProfileStore can write to the DataStore.
+never change again. `"Access"` means Persistore can write to the DataStore.
 
 ### .New()
 ``` luau
@@ -87,8 +87,8 @@ ProfileStore.SetConstant(name, value)
 |   -- "CRITICAL_STATE_EXPIRE" | "MAX_MESSAGE_QUEUE"
   -- value   [number]
 ```
-A feature for experienced developers who understand how ProfileStore works for changing internal constants
-without having to fork the ProfileStore project.
+A feature for experienced developers who understand how Persistore works for changing internal constants
+without having to fork the Persistore project.
 
 ## ProfileStore
 
@@ -115,7 +115,7 @@ using the same key from `ProfileStore` and `ProfileStore.Mock` will be different
 
 `ProfileStore.Mock` is useful for customizing your testing environment in cases where you want
 to [enable Roblox API services](https://create.roblox.com/docs/cloud-services/data-stores#enable-studio-access) in studio,
-but don't want ProfileStore to save to live keys:
+but don't want Persistore to save to live keys:
 ``` luau
 local RunService = game:GetService("RunService")
 local PlayerStore = ProfileStore.New("PlayerData", {})
@@ -188,11 +188,11 @@ you're done working with a profile as failing to do so will make the game perfor
 
 The second optional argument to `ProfileStore:StartSessionAsync()` is a table with additional rules for the session start request:
 
-- **`Cancel`** - If set to a function, the function will be called several times by ProfileStore to check whether
+- **`Cancel`** - If set to a function, the function will be called several times by Persistore to check whether
 the profile session is still needed. If the profile is no longer needed, the `Cancel` function should return `true`.
 The `Cancel` argument would be useful in rare cases where the DataStores are unresponsive and a player leaves
-before a session was started allowing ProfileStore to stop making additional requests to the DataStore.
-Using the `Cancel` argument also disables the default ProfileStore session start timeout as the developer
+before a session was started allowing Persistore to stop making additional requests to the DataStore.
+Using the `Cancel` argument also disables the default Persistore session start timeout as the developer
 would decide when the profile is no longer needed.
 - **`Steal`** - (e.g. `{Steal = true}`) If set to `true`, doesn't let an active session make final changes to `Profile.Data`
 and immediately starts a session on the server calling `ProfileStore:StartSessionAsync()` with this argument.
@@ -212,7 +212,7 @@ local profile = PlayerStore:StartSessionAsync(tostring(player.UserId), {
 ```
 
 !!! notice
-    ProfileStore saves profiles to live DataStore keys in Roblox Studio when [Roblox API services are enabled](https://create.roblox.com/docs/cloud-services/data-stores#enable-studio-access). See [ProfileStore.Mock](#mock) if saving to live keys during testing is not desired.
+    Persistore saves profiles to live DataStore keys in Roblox Studio when [Roblox API services are enabled](https://create.roblox.com/docs/cloud-services/data-stores#enable-studio-access). See [ProfileStore.Mock](#mock) if saving to live keys during testing is not desired.
 
 !!! warning
     `:StartSessionAsync()` can return `nil` when another remote Roblox server attempts to start a session for the same profile at the same time.
@@ -336,7 +336,7 @@ end
 **Case example: Studying data mutation over time**
 
 ```lua
--- You have ProfileStore working in your game. You join
+-- You have Persistore working in your game. You join
 --  the game with your own account and go to https://www.unixtimestamp.com
 --  and save the current UNIX timestamp resembling present time.
 --  You can then make the game alter your data by giving you
@@ -632,8 +632,8 @@ end)
 ```
 Sets a function that will handle existing and future incoming messages sent to this profile by [`ProfileStore:MessageAsync()`](#messageasync).
 The `message` argument is a `table` that was passed as the second argument to [`ProfileStore:MessageAsync()`](#messageasync).
-The `processed` argument is a function that must be called to let ProfileStore know this message has
-been processed. If a message is not processed by calling `processed()`, ProfileStore will continue to iterate through
+The `processed` argument is a function that must be called to let Persistore know this message has
+been processed. If a message is not processed by calling `processed()`, Persistore will continue to iterate through
 other functions passed to `Profile:MessageHandler()` and will broadcast the same `message`. Unprocessed messages will
 be broadcasted to new functions passed to `Profile:MessageHandler()` and will continue to do so when a profile session is started
 another time (e.g. after a player joins the game again) until `processed()` is finally called.

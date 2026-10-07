@@ -1,7 +1,8 @@
-site_name: ProfileStore
-site_url: https://madstudioroblox.github.io/ProfileStore
-repo_name: MadStudioRoblox/ProfileStore
-repo_url: https://github.com/MadStudioRoblox/ProfileStore
+site_name: Persistore
+site_url: https://checkpickerupper.github.io/Persistore/
+repo_name: CheckPickerUpper/Persistore
+repo_url: https://github.com/CheckPickerUpper/Persistore
+copyright: "Persistore, a modified fork of ProfileStore by loleris (MAD STUDIO). Apache-2.0."
 
 theme:
   icon:

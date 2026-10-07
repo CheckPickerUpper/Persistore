@@ -1,6 +1,6 @@
 [package]
-name = "lm-loleris/profilestore"
-description = "Periodic DataStore saving solution with session locking"
+name = "checkpickerupper/persistore"
+description = "Persistore: a ProfileStore fork with session locking, session reasons and save outcomes"
 version = "1.0.3"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "server"
