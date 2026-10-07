@@ -219,6 +219,27 @@ local profile = PlayerStore:StartSessionAsync(tostring(player.UserId), {
     This case should be extremely rare and it would be recommended to [:Kick()](https://create.roblox.com/docs/reference/engine/classes/Player#Kick)
     the player if `:StartSessionAsync()` does not return a `Profile` object.
 
+### :StartSessionResultAsync()
+``` luau
+local result = ProfileStore:StartSessionResultAsync(profile_key, params)
+if result.Kind == "SessionStarted" then
+  local profile = result.Profile
+else
+  print(result.Because)
+end
+```
+Starts a session with the same parameters and locking behavior as [`StartSessionAsync`](#startsessionasync).
+Returns `{Kind = "SessionStarted", Profile = profile}` or `{Kind = "SessionNotStarted", Because = reason}`.
+Available on `ProfileStore.Mock` as well. `StartSessionAsync` continues to return a profile or `nil`.
+
+| Reason | Meaning |
+| --- | --- |
+| `ServerClosing` | The server is closing. |
+| `Cancelled` | The caller cancelled the request. If cancellation arrives after loading, the session is released before returning. |
+| `SupersededOnThisServer` | A newer request on this server took over the load job for this key. |
+| `ClaimedByAnotherServer` | Another server replaced this server's request to acquire the session. |
+| `TimedOut` | DataStore requests kept failing for `START_SESSION_TIMEOUT` seconds without a caller-provided `Cancel`. |
+
 ### :MessageAsync()
 ``` luau
 ProfileStore:MessageAsync(profile_key, message) --> is_success [bool]
@@ -502,7 +523,7 @@ end)
 
 ### .OnSessionEnd
 ``` luau
-Profile.OnSessionEnd:Connect(function()
+Profile.OnSessionEnd:Connect(function(reason: "Manual" | "External" | "Shutdown" | "Stolen")
   print(`Profile session has ended - Profile.Data will no longer be saved to the DataStore`)
 end)
 ```
@@ -510,6 +531,9 @@ The `Profile.OnSessionEnd` signal can be fired after the developer calls [`Profi
 Another server calls [`ProfileStore:StartSessionAsync()`] for the same profile or when the server is shutting down.
 After the `Profile.OnSessionEnd` signal is fired, no further changes to `Profile.Data` should be made.
 `Profile.OnSessionEnd` will fire even when a profile session is stolen, whereas `Profile.OnLastSave` would not.
+The reason is `Manual` for `EndSession()`, `External` when another server requests the final save,
+`Shutdown` when the server closes, or `Stolen` when a save discovers that this session no longer owns the lock.
+Listeners that take no arguments continue to work.
 In some cases it would be preferable to kick the player from the game when this signal is fired:
 
 ``` luau
@@ -623,6 +647,23 @@ so `Profile:Save()` should only be used for critical moments like ensuring data 
 purchases are saved before a server crash could occur. The cost of calling `Profile:Save()` is one [:UpdateAsync()](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore#UpdateAsync)
 call - see the official documentation on [DataStore limits](https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits#server-limits) to
 evaluate your use case.
+
+### :SaveAsync()
+``` luau
+local outcome = Profile:SaveAsync()
+```
+Yields until the save attempt finishes and delays the next auto-save just like [`Save`](#save).
+Errors for profiles loaded in view mode; use `SetAsync()` for those profiles.
+
+| Outcome | Meaning |
+| --- | --- |
+| `Written` | This attempt wrote the profile's data. `LastSavedData` now contains the saved data. |
+| `SessionEnded` | The profile was inactive before the attempt; no request was made. |
+| `OwnershipRefused` | The request completed, but this session no longer owned the lock. `OnSessionEnd` fires with `Stolen`. |
+| `RequestFailed` | The DataStore request failed. |
+
+`OnSaveAttempt` reports the same outcome for this request, with purpose `SessionSave`.
+`SessionEnded` does not fire `OnSaveAttempt` because no attempt was made.
 
 ### :SetAsync()
 ``` luau
