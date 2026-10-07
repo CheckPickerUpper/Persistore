@@ -296,6 +296,372 @@ task.spawn(function()
 		store.Mock:RemoveAsync(key)
 	end
 
+	-- Session start results:
+
+	do
+		local key = UniqueKey("Started")
+		local result = Store1:StartSessionResultAsync(key)
+		TestPass(`An available session starts`, result.Kind == "SessionStarted" and result.Profile:IsActive())
+		if result.Kind == "SessionStarted" then
+			result.Profile:EndSession()
+			result.Profile.OnAfterSave:Wait()
+		end
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local store = ProfileStore.New(UniqueKey("MockCancel"), {})
+		local key = UniqueKey("Cancelled")
+		local profile = store.Mock:StartSessionAsync(key, {Cancel = function() return true end})
+		TestPass(`Mock forwards Cancel to the upstream start method`, profile == nil)
+		if profile ~= nil then
+			profile:EndSession()
+			profile.OnAfterSave:Wait()
+		end
+		local result = store.Mock:StartSessionResultAsync(key, {Cancel = function() return true end})
+		TestPass(`Mock returns the cancellation reason before loading`, result.Kind == "SessionNotStarted" and result.Because == "Cancelled")
+		if result.Kind == "SessionStarted" then
+			result.Profile:EndSession()
+			result.Profile.OnAfterSave:Wait()
+		end
+		store.Mock:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("BeforeLoad")
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function() return true end})
+		TestPass(`Cancel stops a session before loading`, result.Kind == "SessionNotStarted" and result.Because == "Cancelled")
+		if result.Kind == "SessionStarted" then
+			result.Profile:EndSession()
+			result.Profile.OnAfterSave:Wait()
+		end
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("DuringLoad")
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			return checks >= 2
+		end})
+		TestPass(`Cancel during loading leaves no active session`, result.Kind == "SessionNotStarted" and result.Because == "Cancelled"
+			and UpdateAsync(Store1.Name, key, function(data) return data end, TEST_MOCK).MetaData.ActiveSession == nil)
+		if result.Kind == "SessionStarted" then
+			result.Profile:EndSession()
+			result.Profile.OnAfterSave:Wait()
+		end
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("AfterLoad")
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			return checks >= 4
+		end})
+		local record = UpdateAsync(Store1.Name, key, function(data) return data end, TEST_MOCK)
+		TestPass(`Cancel after loading releases the session`, result.Kind == "SessionNotStarted" and result.Because == "Cancelled"
+			and record.MetaData.SessionLoadCount == 1 and record.MetaData.ActiveSession == nil)
+		if result.Kind == "SessionStarted" then
+			result.Profile:EndSession()
+			result.Profile.OnAfterSave:Wait()
+		end
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("HeldCancel")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {ActiveSession = {-1, "OtherServer"}, LastUpdate = os.time(), SessionLoadCount = 0}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			return checks >= 4
+		end})
+		TestPass(`Cancel stops a claim held by another server`, result.Kind == "SessionNotStarted" and result.Because == "Cancelled")
+		Store1:RemoveAsync(key)
+	end
+
+	for claim_count = 2, 3 do
+		local key = UniqueKey("Concurrent")
+		local results = {}
+		local completed = 0
+		for index = 1, claim_count do
+			task.spawn(function()
+				results[index] = Store1:StartSessionResultAsync(key)
+				completed += 1
+			end)
+		end
+		local deadline = os.clock() + 10
+		repeat task.wait() until completed == claim_count or os.clock() > deadline
+		local is_pass = completed == claim_count
+		for index = 1, claim_count - 1 do
+			is_pass = is_pass and results[index].Kind == "SessionNotStarted" and results[index].Because == "SupersededOnThisServer"
+		end
+		is_pass = is_pass and results[claim_count].Kind == "SessionStarted" and results[claim_count].Profile:IsActive()
+		TestPass(`The last of {claim_count} concurrent claims starts; earlier claims are superseded`, is_pass)
+		for _, result in pairs(results) do
+			if result.Kind == "SessionStarted" then
+				result.Profile:EndSession()
+				result.Profile.OnAfterSave:Wait()
+			end
+		end
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("OtherClaim")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {ActiveSession = {-1, "OtherServer"}, LastUpdate = os.time(), SessionLoadCount = 0}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			if checks == 5 then
+				UpdateAsync(Store1.Name, key, function(data)
+					data.MetaData.ForceLoadSession = {-1, "NewClaim"}
+					return data
+				end, TEST_MOCK)
+			end
+			return checks > 12
+		end})
+		TestPass(`Another server replacing the force-load claim interrupts loading`, result.Kind == "SessionNotStarted" and result.Because == "ClaimedByAnotherServer")
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local was_closing = ProfileStore.IsClosing
+		ProfileStore.IsClosing = true
+		local result = Store1:StartSessionResultAsync(UniqueKey("Closing"))
+		ProfileStore.IsClosing = was_closing
+		TestPass(`A closing server refuses a new session`, result.Kind == "SessionNotStarted" and result.Because == "ServerClosing")
+	end
+
+	do
+		local store = ProfileStore.New(UniqueKey("MockSteal"), {})
+		local key = UniqueKey("Steal")
+		UpdateAsync(store.Name, key, function()
+			return {Data = {}, MetaData = {ActiveSession = {-1, "OtherServer"}, LastUpdate = os.time(), SessionLoadCount = 0}, GlobalUpdates = {0, {}}}
+		end, true)
+		local checks = 0
+		local profile = store.Mock:StartSessionAsync(key, {Steal = true, Cancel = function()
+			checks += 1
+			return checks > 4
+		end})
+		TestPass(`Mock forwards Steal to take an existing lock`, profile ~= nil and profile:IsActive())
+		if profile ~= nil then
+			profile:EndSession()
+			profile.OnAfterSave:Wait()
+		end
+		store.Mock:RemoveAsync(key)
+	end
+
+	-- Session end reasons and synchronous saves:
+
+	do
+		local key = UniqueKey("SaveAsync")
+		local profile = Store1:StartSessionAsync(key)
+		local attempts = {}
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome)
+			if profile_key == key then table.insert(attempts, outcome) end
+		end)
+		profile.Data.Counter = 57
+		local outcome = profile:SaveAsync()
+		TestPass(`SaveAsync waits for Written and updates LastSavedData`, outcome == "Written" and profile.LastSavedData.Counter == 57
+			and attempts[1] == outcome and #attempts == 1)
+		local payload = Store1:GetAsync(key)
+		local success = pcall(function() payload:SaveAsync() end)
+		TestPass(`SaveAsync rejects a profile loaded in view mode`, success == false)
+		local reason
+		local upstream_listener = false
+		profile.OnSessionEnd:Connect(function(ended) reason = ended end)
+		profile.OnSessionEnd:Connect(function() upstream_listener = true end)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		TestPass(`EndSession reports Manual and calls listeners with no arguments`, reason == "Manual" and upstream_listener)
+		local attempt_count = #attempts
+		TestPass(`SaveAsync on an ended session makes no request`, profile:SaveAsync() == "SessionEnded" and #attempts == attempt_count)
+		connection:Disconnect()
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("Refused")
+		local profile = Store1:StartSessionAsync(key)
+		local reason
+		local attempt
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome)
+			if profile_key == key then attempt = outcome end
+		end)
+		profile.OnSessionEnd:Connect(function(ended) reason = ended end)
+		UpdateAsync(Store1.Name, key, function(data)
+			data.MetaData.ActiveSession = {-1, "OtherServer"}
+			return data
+		end, TEST_MOCK)
+		profile.Data.Counter = 99
+		local outcome = profile:SaveAsync()
+		TestPass(`SaveAsync refuses a stolen lock and reports Stolen`, outcome == "OwnershipRefused" and attempt == outcome
+			and reason == "Stolen" and profile:IsActive() == false and Store1:GetAsync(key).Data.Counter == 0)
+		connection:Disconnect()
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("External")
+		local profile = Store1:StartSessionAsync(key)
+		local reason
+		profile.OnSessionEnd:Connect(function(ended) reason = ended end)
+		profile.Data.Counter = 34
+		UpdateAsync(Store1.Name, key, function(data)
+			data.MetaData.ForceLoadSession = {-1, "OtherClaim"}
+			return data
+		end, TEST_MOCK)
+		local outcome = profile:SaveAsync()
+		local saved_profile = Store1:GetAsync(key)
+		TestPass(`A foreign force-load request ends the session with External`, reason == "External" and outcome == "Written"
+			and profile:IsActive() == false and saved_profile.Data.Counter == 34 and saved_profile.Session == nil)
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("Overwritten")
+		local profile = Store1:StartSessionAsync(key)
+		local reason
+		profile.OnSessionEnd:Connect(function(ended) reason = ended end)
+		local payload = Store1:GetAsync(key)
+		payload.Data.Counter = 75
+		payload:SetAsync()
+		profile.Data.Counter = 76
+		local outcome = profile:SaveAsync()
+		TestPass(`SetAsync replacement ends the live session with Overwritten`, reason == "Overwritten"
+			and outcome == "OwnershipRefused" and profile:IsActive() == false and Store1:GetAsync(key).Data.Counter == 75)
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("TimedOut")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {SessionLoadCount = {}}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local errors = 0
+		local connection = ProfileStore.OnError:Connect(function(_, store_name, profile_key)
+			if store_name == Store1.Name and profile_key == key then errors += 1 end
+		end)
+		ProfileStore.SetConstant("START_SESSION_TIMEOUT", 0)
+		local result = Store1:StartSessionResultAsync(key)
+		ProfileStore.SetConstant("START_SESSION_TIMEOUT", 120)
+		connection:Disconnect()
+		TestPass(`Failed session requests time out without Cancel`, errors == 1
+			and result.Kind == "SessionNotStarted" and result.Because == "TimedOut")
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("FailedCancel")
+		UpdateAsync(Store1.Name, key, function()
+			return {Data = {}, MetaData = {SessionLoadCount = {}}, GlobalUpdates = {0, {}}}
+		end, TEST_MOCK)
+		local errors = 0
+		local connection = ProfileStore.OnError:Connect(function(_, store_name, profile_key)
+			if store_name == Store1.Name and profile_key == key then errors += 1 end
+		end)
+		local checks = 0
+		local result = Store1:StartSessionResultAsync(key, {Cancel = function()
+			checks += 1
+			return checks >= 4
+		end})
+		connection:Disconnect()
+		TestPass(`Cancel stops failed session requests`, errors == 1 and checks == 4
+			and result.Kind == "SessionNotStarted" and result.Because == "Cancelled")
+		Store1:RemoveAsync(key)
+	end
+
+	do
+		local key = UniqueKey("RequestFailed")
+		local profile = Store1:StartSessionAsync(key)
+		local original_record
+		UpdateAsync(Store1.Name, key, function(data)
+			original_record = DeepCopyTable(data)
+			data.Data = "corrupt"
+			return data
+		end, TEST_MOCK)
+		local attempts = {}
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome)
+			if profile_key == key then table.insert(attempts, outcome) end
+		end)
+		local outcome = profile:SaveAsync()
+		connection:Disconnect()
+		TestPass(`SaveAsync reports a failed request consistently`, outcome == "RequestFailed"
+			and #attempts == 1 and attempts[1] == outcome)
+		UpdateAsync(Store1.Name, key, function() return original_record end, TEST_MOCK)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		Store1:RemoveAsync(key)
+	end
+
+	print(PREFIX .. `Skipping Shutdown session-end test (requires server shutdown)`)
+
+	-- Save attempt results:
+
+	do
+
+		local key = UniqueKey("SaveAttempt")
+		local attempts = {}
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				table.insert(attempts, {outcome, purpose})
+			end
+		end)
+
+		local profile = Store1:StartSessionAsync(key)
+		profile.Data.Counter = 1
+		profile:Save()
+		profile.OnAfterSave:Wait()
+		local saved = Store1:GetAsync(key)
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		local payload = Store1:GetAsync(key)
+		payload.Data.Counter = 2
+		payload:SetAsync()
+		local overwritten = Store1:GetAsync(key)
+
+		connection:Disconnect()
+		Store1:RemoveAsync(key)
+
+		TestPass(`Manual, final and overwrite save attempts`, saved.Data.Counter == 1 and overwritten.Data.Counter == 2
+			and #attempts == 3
+			and attempts[1][1] == "Written" and attempts[1][2] == "SessionSave"
+			and attempts[2][1] == "Written" and attempts[2][2] == "FinalSave"
+			and attempts[3][1] == "Written" and attempts[3][2] == "Overwrite")
+
+	end
+
+	do
+
+		local store = ProfileStore.New(UniqueKey("MockSaveAttempt"), {})
+		local key = UniqueKey("Mock")
+		local attempts = {}
+		local connection = store.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			table.insert(attempts, {profile_key, outcome, purpose})
+		end)
+
+		local profile = store.Mock:StartSessionAsync(key)
+		profile.Data.Counter = 1
+		profile:EndSession()
+		profile.OnAfterSave:Wait()
+		local saved = store.Mock:GetAsync(key)
+
+		connection:Disconnect()
+		store.Mock:RemoveAsync(key)
+
+		TestPass(`Mock saves reach the store signal`, saved.Data.Counter == 1 and #attempts == 1
+			and attempts[1][1] == key and attempts[1][2] == "Written" and attempts[1][3] == "FinalSave")
+
+	end
+
 	-- Versioning test:
 
 	if is_api_access == true and TEST_MOCK == false then
@@ -639,7 +1005,15 @@ task.spawn(function()
 		
 		local initial_check = profile.LastSavedData ~= profile.Data
 
+		local attempt
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				attempt = {outcome, purpose}
+			end
+		end)
+
 		profile.OnAfterSave:Wait()
+		connection:Disconnect()
 		
 		local is_pass = initial_check and profile.LastSavedData ~= profile.Data
 			and profile.LastSavedData.LoadedFirstTime == true
@@ -650,6 +1024,7 @@ task.spawn(function()
 		Store1:RemoveAsync(key)
 
 		TestPass("LastSavedData test", is_pass)
+		TestPass("Auto-save attempt result", attempt ~= nil and attempt[1] == "Written" and attempt[2] == "SessionSave")
 
 	end
 	
@@ -768,6 +1143,12 @@ task.spawn(function()
 		local key = UniqueKey(4)
 		
 		local profile = Store1:StartSessionAsync(key)
+		local attempt
+		local connection = Store1.OnSaveAttempt:Connect(function(profile_key, outcome, purpose)
+			if profile_key == key then
+				attempt = {outcome, purpose}
+			end
+		end)
 		
 		UpdateAsync(Store1.Name, key, function() -- "Stealing" profile through injection
 			return {
@@ -792,9 +1173,11 @@ task.spawn(function()
 			task.wait()
 		end
 		
+		connection:Disconnect()
 		Store1:RemoveAsync(key)
 		
 		TestPass(`Test #4`, true)
+		TestPass(`Lost ownership save attempt`, attempt ~= nil and attempt[1] == "OwnershipRefused" and attempt[2] == "SessionSave")
 		
 	end
 	
