@@ -175,6 +175,108 @@ task.spawn(function()
 	
 	print(PREFIX .. `Begin...`)
 
+	for _, missing_record in ipairs({false, true}) do
+		local store = ProfileStore.New(UniqueKey("Takeover"), {Counter = 0})
+		local key = UniqueKey("Queued")
+		local profile = store:StartSessionAsync(key)
+		profile:EndSession()
+		if missing_record == true then
+			UpdateAsync(store.Name, key, function() return {GlobalUpdates = {0, {}}} end, false)
+		end
+		local is_cancel = false
+		local first_profile
+		local second_profile
+		local completed = 0
+		task.spawn(function()
+			first_profile = store:StartSessionAsync(key, {Cancel = function() return is_cancel end})
+			completed += 1
+		end)
+		task.spawn(function()
+			second_profile = store:StartSessionAsync(key)
+			completed += 1
+		end)
+		is_cancel = true
+		local deadline = os.clock() + 10
+		repeat task.wait() until completed == 2 or os.clock() > deadline
+		local expected_load_count = if missing_record == true then 1 else 2
+		TestPass(`A takeover ignores the previous request's cancellation ({if missing_record then "missing" else "existing"} record)`,
+			completed == 2 and first_profile == nil and second_profile ~= nil and second_profile:IsActive()
+			and second_profile.SessionLoadCount == expected_load_count)
+		for _, loaded_profile in pairs({first_profile, second_profile}) do
+			loaded_profile:EndSession()
+			loaded_profile.OnAfterSave:Wait()
+		end
+		store:RemoveAsync(key)
+	end
+
+	do
+		local store = ProfileStore.New(UniqueKey("TakeoverSteal"), {Counter = 0})
+		local key = UniqueKey("Held")
+		local profile = store:StartSessionAsync(key)
+		profile:EndSession()
+		UpdateAsync(store.Name, key, function(data)
+			data.MetaData.ActiveSession = {-1, "ForeignServer"}
+			return data
+		end, false)
+		local first_profile
+		local second_profile
+		local completed = 0
+		task.spawn(function()
+			first_profile = store:StartSessionAsync(key, {Steal = true})
+			completed += 1
+		end)
+		local checks = 0
+		task.spawn(function()
+			second_profile = store:StartSessionAsync(key, {Cancel = function()
+				checks += 1
+				return checks >= 4
+			end})
+			completed += 1
+		end)
+		local deadline = os.clock() + 10
+		repeat task.wait() until completed == 2 or os.clock() > deadline
+		local record = UpdateAsync(store.Name, key, function(data) return data end, false)
+		TestPass(`A takeover without Steal preserves the foreign session`, completed == 2 and first_profile == nil
+			and second_profile == nil and record.MetaData.ActiveSession[2] == "ForeignServer")
+		for _, loaded_profile in pairs({first_profile, second_profile}) do
+			loaded_profile:EndSession()
+			loaded_profile.OnAfterSave:Wait()
+		end
+		store:RemoveAsync(key)
+	end
+
+	do
+		local store = ProfileStore.New(UniqueKey("LateTakeover"), {Counter = 0})
+		local key = UniqueKey("Unclaimed")
+		local first_profile
+		local second_profile
+		local completed = 0
+		local checks = 0
+		task.spawn(function()
+			first_profile = store:StartSessionAsync(key, {Cancel = function()
+				checks += 1
+				return checks >= 2
+			end})
+			completed += 1
+		end)
+		local record = UpdateAsync(store.Name, key, function(data) return data end, false)
+		local was_unclaimed = completed == 0 and checks == 2 and record.MetaData.ActiveSession == nil
+		task.spawn(function()
+			second_profile = store:StartSessionAsync(key)
+			completed += 1
+		end)
+		local deadline = os.clock() + 10
+		repeat task.wait() until completed == 2 or os.clock() > deadline
+		TestPass(`A takeover retries a record left unclaimed before it took over`, was_unclaimed and completed == 2
+			and first_profile == nil and second_profile ~= nil and second_profile:IsActive()
+			and second_profile.SessionLoadCount == 1)
+		for _, loaded_profile in pairs({first_profile, second_profile}) do
+			loaded_profile:EndSession()
+			loaded_profile.OnAfterSave:Wait()
+		end
+		store:RemoveAsync(key)
+	end
+
 	do
 		local store = ProfileStore.New(UniqueKey("AbortedUpdate"), {})
 		local key = UniqueKey("Copy")
